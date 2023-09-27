@@ -344,7 +344,7 @@ class EvalConfigurationPage(tk.Frame):
 
         # set the goal conditioning
         if self.controller.policy is not None:
-            self.controller.policy.language_conditioning = self.lang_text.get('1.0', 'end-1c')
+            self.controller.policy.load_lang_conditioning(self.lang_text.get('1.0', 'end-1c'))
         
         print(f"language conditioning: {self.lang_text.get('1.0', 'end-1c')}")
         if self.controller.eval_goal_dirs:
@@ -516,7 +516,13 @@ class CaptureGoal(tk.Frame):
     def collect_trajectory(self):
         info = self.controller.info.copy()
         practice = self.mode == "practice_traj"
+        if self.mode != 'traj':
+            self.controller.robot.policy = None
+        else:
+            self.controller.robot.policy = self.controller.policy
         self.controller.robot.collect_trajectory(info=info, practice=practice, reset_robot=False)
+
+        
         self.end_trajectory()
 
     def update_timer(self, start_time):
