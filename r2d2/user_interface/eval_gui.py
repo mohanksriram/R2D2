@@ -8,9 +8,16 @@ from tkinter import *
 from r2d2.user_interface.gui import *
 from r2d2.misc.time import time_ms
 
+from r2d2.controllers.oculus_controller import VRPolicy
+from r2d2.robot_env import RobotEnv
+from r2d2.user_interface.data_collector import DataCollecter
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(dir_path, "../../data")
 LAST_N_GOALS = 5
+PASTEL_GREEN = "#b8d8be"
+PASTEL_RED = "#FF5733"
+BACKGROUND_COLOR = "#bfc4c0"
 
 _DEFAULT_RESOLUTION = "1500x1200"
 _ESCAPE_KEY = "<Escape>"
@@ -21,9 +28,18 @@ class Condition:
     LANGUAGE = "language"
 
 class EvalGUI(tk.Tk):
-    def __init__(self, policy, robot=None, fullscreen=False):
+    def __init__(self, policy, fullscreen=False):
         # Initialize #
         super().__init__()
+
+        self.eval_traj_dir = os.path.join(data_dir, "evals", str(date.today()))
+        if not os.path.isdir(self.eval_traj_dir):
+            os.makedirs(self.eval_traj_dir)
+
+        env = RobotEnv()
+        controller = VRPolicy()
+        robot = DataCollecter(env = env, controller=controller, policy=policy, save_data=True, save_traj_dir=self.eval_traj_dir)
+
         self.policy = policy
         self.geometry(_DEFAULT_RESOLUTION)
         self.attributes("-fullscreen", fullscreen)
@@ -41,9 +57,6 @@ class EvalGUI(tk.Tk):
             "eval_conditioning": [], # radio button
             "user": "",
         }
-        self.eval_traj_dir = os.path.join(data_dir, "evals", str(date.today()))
-        if not os.path.isdir(self.eval_traj_dir):
-            os.makedirs(self.eval_traj_dir)
 
         self.eval_goal_dirs = []
         # populate from past goal dirs
@@ -216,7 +229,7 @@ class EvalGUI(tk.Tk):
 
 class EvalConfigurationPage(tk.Frame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, bg=BACKGROUND_COLOR)
         self.controller = controller
 
         # Update Based Off Activity #
@@ -228,7 +241,7 @@ class EvalConfigurationPage(tk.Frame):
         title_lbl.place(relx=0.5, rely=0.05, anchor="n")
 
         pos_dict = {
-            "goal conditioning": (0.25, 0.25),
+            "goal conditioning": (0.25, 0.5),
         }
         self.conditioning_dict = defaultdict(BooleanVar)
 
@@ -256,7 +269,9 @@ class EvalConfigurationPage(tk.Frame):
         self.lang_text_lbl = tk.Label(self, text="Enter the text for language conditioning", font=Font(size=20, underline=True))
         self.lang_text = tk.Text(self, height=4, width=25, font=Font(size=15))
         self.lang_text_x = 0.5
-        self.lang_text_y = 0.29
+        self.lang_text_y = 0.55
+        self.eval_x = 0.4
+        self.eval_y = 0.3
 
         self.toggle_text_box()        
 
@@ -264,15 +279,36 @@ class EvalConfigurationPage(tk.Frame):
         collect_btn = tk.Button(
             self,
             text="evaluate",
-            highlightbackground="green",
-            font=Font(size=15, weight="bold"),
-            height=1,
-            width=8,
+            font=Font(size=18, weight="bold"),
+            height=2,
+            width=10,
             borderwidth=5,
             command=self.eval_robot,
         )
-        collect_btn.place(relx=0.46, rely=0.5)
+        collect_btn.place(relx=self.eval_x, rely=self.eval_y)
 
+        # Create a Boolean variable to track the state of the button.
+        self.controller.randomize = True
+
+
+        reset_randomize_label = tk.Label(self, text="randomize reset" + ":", font=Font(size=20, underline=True))
+        reset_randomize_label.place(relx=self.eval_x+0.15, rely=self.eval_y)
+
+        # Create a Button widget.
+        self.reset_randomize_btn = tk.Button(self, text="On", command=self.toggle_randomize_btn, 
+                                             bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
+        self.reset_randomize_btn.place(relx=self.eval_x+0.15, rely=self.eval_y+0.04)
+
+
+        save_eval_trajs_label = tk.Label(self, text="save eval trajs" + ":", font=Font(size=20, underline=True))
+        save_eval_trajs_label.place(relx=self.eval_x+0.15, rely=self.eval_y+0.08)
+
+        # Create a Button widget.
+        self.save_eval_trajs_btn = tk.Button(self, text="On", command=self.toggle_save_btn,
+                                              bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
+        self.save_eval_trajs_btn.place(relx=self.eval_x+0.15, rely=self.eval_y+0.12)
+
+        
         # Practice Button #
         self.capture_goal_btn = tk.Button(
             self,
@@ -284,6 +320,23 @@ class EvalConfigurationPage(tk.Frame):
             borderwidth=5,
             command=self.practice_robot,
         )
+
+    def toggle_randomize_btn(self):
+            self.controller.randomize = not self.controller.randomize
+            # Update the button text to reflect the new state.
+            if self.controller.randomize:
+                self.reset_randomize_btn.config(text="On", bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
+            else:
+                self.reset_randomize_btn.config(text="Off", bg=PASTEL_RED, activebackground=PASTEL_RED)
+
+    def toggle_save_btn(self):
+            self.controller.robot.save_data = not self.controller.robot.save_data
+            # Update the button text to reflect the new state.
+            if self.controller.robot.save_data:
+                self.save_eval_trajs_btn.config(text="On", bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
+            else:
+                self.save_eval_trajs_btn.config(text="Off", bg=PASTEL_RED, activebackground=PASTEL_RED)                
+
 
     def update_goal_radio_btns(self):
         # remove the old radio buttons
@@ -302,7 +355,7 @@ class EvalConfigurationPage(tk.Frame):
             self.controller.policy.load_goal_img_dir(self.controller.eval_goal_dirs[::-1][self.selected_goal_dir_idx.get()])
 
     def place_image_gc_elements(self):
-        self.goal_dir_label.place(relx=0.5, rely=0.25)
+        self.goal_dir_label.place(relx=0.5, rely=0.5)
         for i in range(len(self.radio_buttons)):
             self.radio_buttons[i].place(relx=self.lang_text_x, rely=self.lang_text_y + i * 0.02)
         self.capture_goal_btn.place(relx=self.lang_text_x + 0.04, rely=self.lang_text_y + 0.12)
@@ -504,7 +557,7 @@ class CaptureGoal(tk.Frame):
 
         # Add Mode Specific Stuff #
         if "traj" in self.mode:
-            self.controller.robot.reset_robot(randomize=False)
+            self.controller.robot.reset_robot(randomize=self.controller.randomize)
 
             self.timer.place(relx=0.79, rely=0.01)
             self.update_timer(time.time())
