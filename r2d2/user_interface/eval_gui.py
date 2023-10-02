@@ -1,12 +1,16 @@
 from datetime import date
 import numpy as np
-import tkinter as tk
 
 
-from tkinter.font import *
 from tkinter import *
 from r2d2.user_interface.gui import *
 from r2d2.misc.time import time_ms
+
+import customtkinter as ctk
+
+ctk.set_appearance_mode("dark")  # Modes: system (default), light, dark
+ctk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
+ctk.DrawEngine.preferred_drawing_method = "circle_shapes"
 
 from r2d2.controllers.oculus_controller import VRPolicy
 from r2d2.robot_env import RobotEnv
@@ -14,10 +18,10 @@ from r2d2.user_interface.data_collector import DataCollecter
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(dir_path, "../../data")
+
 LAST_N_GOALS = 5
-PASTEL_GREEN = "#b8d8be"
-PASTEL_RED = "#FF5733"
-BACKGROUND_COLOR = "#bfc4c0"
+MIDDLE_COLUMN = 4
+GOAL_IMAGE_ROW = 7
 
 _DEFAULT_RESOLUTION = "1500x1200"
 _ESCAPE_KEY = "<Escape>"
@@ -27,7 +31,7 @@ class Condition:
     GOAL = "goal"
     LANGUAGE = "language"
 
-class EvalGUI(tk.Tk):
+class EvalGUI(ctk.CTk):
     def __init__(self, policy, fullscreen=False):
         # Initialize #
         super().__init__()
@@ -38,7 +42,7 @@ class EvalGUI(tk.Tk):
 
         env = RobotEnv()
         controller = VRPolicy()
-        robot = DataCollecter(env = env, controller=controller, policy=policy, save_data=True, save_traj_dir=self.eval_traj_dir)
+        robot = DataCollecter(env = env, controller=controller, policy=policy, save_data=False, save_traj_dir=self.eval_traj_dir)
 
         self.policy = policy
         self.geometry(_DEFAULT_RESOLUTION)
@@ -67,12 +71,12 @@ class EvalGUI(tk.Tk):
             os.makedirs(self.eval_traj_dir)
 
         # Create Resizable Container #
-        container = tk.Frame(self)
+        container = ctk.CTkFrame(master=self)
         container.pack(side="top", fill="both", expand=True)
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
-                # Organize Frame Dict #
+        # Organize Frame Dict #
         self.frames = {}
         self.curr_frame = None
         for F in (
@@ -126,7 +130,6 @@ class EvalGUI(tk.Tk):
         if hasattr(old_frame, "exit_page"):
             old_frame.exit_page()
         if hasattr(self.curr_frame, "initialize_page") and refresh_page:
-            # self.show_frame(EvalConfigurationPage)
             self.curr_frame.initialize_page()
 
         if wait:
@@ -227,21 +230,24 @@ class EvalGUI(tk.Tk):
             time.sleep(sleep)
 
 
-class EvalConfigurationPage(tk.Frame):
+class EvalConfigurationPage(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=BACKGROUND_COLOR)
+        super().__init__(parent)
         self.controller = controller
 
         # Update Based Off Activity #
         self.controller.bind("<KeyRelease>", self.moniter_keys, add="+")
         self.controller.bind("<ButtonRelease-1>", self.moniter_keys, add="+")
 
+        self.grid_rowconfigure((0, 1, 2, 5, 7, 13, 14), weight=1)
+        self.grid_columnconfigure((0, 1, 2, 5, 6, 7, 8), weight=1)
+
         # Title #
-        title_lbl = Label(self, text="Eval Configuration", font=Font(size=30, weight="bold"))
-        title_lbl.place(relx=0.5, rely=0.05, anchor="n")
+        title_lbl = ctk.CTkLabel(self, text="Eval Configuration", font=ctk.CTkFont(size=30, weight="bold", family='Helectiva'))
+        title_lbl.grid(row=1, column=MIDDLE_COLUMN, sticky='W')
 
         pos_dict = {
-            "goal conditioning": (0.25, 0.5),
+            "goal conditioning": (6, MIDDLE_COLUMN),
         }
         self.conditioning_dict = defaultdict(BooleanVar)
 
@@ -249,105 +255,71 @@ class EvalConfigurationPage(tk.Frame):
         toggle_funcs = [self.toggle_capture_goal, self.toggle_text_box]
         for i, key in enumerate(pos_dict):
             x_pos, y_pos = pos_dict[key]
-            group_lbl = tk.Label(self, text=key + ":", font=Font(size=20, underline=True))
-            group_lbl.place(relx=x_pos, rely=y_pos)
+            group_lbl = ctk.CTkLabel(self, text=key + ":", font=ctk.CTkFont(size=18, underline=True))
+            group_lbl.grid(row=x_pos, column=y_pos, sticky='W')
             
             for i, key in enumerate(conditioning):
-                task_ckbox = tk.Checkbutton(self, text=key, font=Font(size=15), variable=self.conditioning_dict[key], command=toggle_funcs[i])
-                task_ckbox.place(relx=x_pos + 0.01, rely=y_pos + (i + 1) * 0.04)
-
+                task_ckbox = ctk.CTkCheckBox(self, text=key, variable=self.conditioning_dict[key], command=toggle_funcs[i])
+                task_ckbox.grid(row=7+i, column=MIDDLE_COLUMN, sticky='W')
 
         # Goal Conditioning #            
-        self.goal_dir_label = tk.Label(self, text="last five goal directories" + ":", font=Font(size=20, underline=True))
+        self.goal_dir_label = ctk.CTkLabel(self, text="last five goal directories" + ":", font=ctk.CTkFont(size=18, underline=True))
         
-        # create selectable tk radio buttons for all items in self.eval_goal_dirs
+        # create selectable ctk radio buttons for all items in self.eval_goal_dirs
         self.radio_buttons = []
         self.selected_goal_dir_idx = IntVar()
         self.update_goal_radio_btns()
         
         # Free Response Tasks #
-        self.lang_text_lbl = tk.Label(self, text="Enter the text for language conditioning", font=Font(size=20, underline=True))
-        self.lang_text = tk.Text(self, height=4, width=25, font=Font(size=15))
-        self.lang_text_x = 0.5
-        self.lang_text_y = 0.55
-        self.eval_x = 0.4
-        self.eval_y = 0.3
+        # self.lang_text_lbl = ctk.CTkLabel(self, text="Enter the text for language conditioning", font=ctk.CTkFont(size=20, underline=True))
+        self.lang_text = ctk.CTkTextbox(self)
+        self.lang_text.insert("0.0", text="Enter text for language\n conditioning")
 
         self.toggle_text_box()        
 
          # Ready Button #
-        collect_btn = tk.Button(
+        collect_btn = ctk.CTkButton(
             self,
             text="evaluate",
-            font=Font(size=18, weight="bold"),
-            height=2,
-            width=10,
-            borderwidth=5,
             command=self.eval_robot,
+            corner_radius=20
         )
-        collect_btn.place(relx=self.eval_x, rely=self.eval_y)
+        collect_btn.grid(row=2, column=MIDDLE_COLUMN, sticky='W')
+
 
         # Create a Boolean variable to track the state of the button.
-        self.controller.randomize = True
-
-
-        reset_randomize_label = tk.Label(self, text="randomize reset" + ":", font=Font(size=20, underline=True))
-        reset_randomize_label.place(relx=self.eval_x+0.15, rely=self.eval_y)
+        self.controller.randomize = False
 
         # Create a Button widget.
-        self.reset_randomize_btn = tk.Button(self, text="On", command=self.toggle_randomize_btn, 
-                                             bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
-        self.reset_randomize_btn.place(relx=self.eval_x+0.15, rely=self.eval_y+0.04)
-
-
-        save_eval_trajs_label = tk.Label(self, text="save eval trajs" + ":", font=Font(size=20, underline=True))
-        save_eval_trajs_label.place(relx=self.eval_x+0.15, rely=self.eval_y+0.08)
+        self.reset_randomize_btn = ctk.CTkSwitch(self, text="randomize reset", command=self.toggle_randomize_btn)
+        self.reset_randomize_btn.grid(row=3, column=MIDDLE_COLUMN, sticky='W')
 
         # Create a Button widget.
-        self.save_eval_trajs_btn = tk.Button(self, text="On", command=self.toggle_save_btn,
-                                              bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
-        self.save_eval_trajs_btn.place(relx=self.eval_x+0.15, rely=self.eval_y+0.12)
-
-        
+        self.save_eval_trajs_btn = ctk.CTkSwitch(self, text="save evals", command=self.toggle_save_btn)
+        self.save_eval_trajs_btn.grid(row=4, column=MIDDLE_COLUMN, sticky='W')
         # Practice Button #
-        self.capture_goal_btn = tk.Button(
+        self.capture_goal_btn = ctk.CTkButton(
             self,
             text="capture\nnew goal",
-            highlightbackground="green",
-            font=Font(size=12, weight="bold"),
-            height=1,
-            width=9,
-            borderwidth=5,
             command=self.practice_robot,
         )
 
     def toggle_randomize_btn(self):
             self.controller.randomize = not self.controller.randomize
-            # Update the button text to reflect the new state.
-            if self.controller.randomize:
-                self.reset_randomize_btn.config(text="On", bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
-            else:
-                self.reset_randomize_btn.config(text="Off", bg=PASTEL_RED, activebackground=PASTEL_RED)
-
+            
     def toggle_save_btn(self):
             self.controller.robot.save_data = not self.controller.robot.save_data
-            # Update the button text to reflect the new state.
-            if self.controller.robot.save_data:
-                self.save_eval_trajs_btn.config(text="On", bg=PASTEL_GREEN, activebackground=PASTEL_GREEN)
-            else:
-                self.save_eval_trajs_btn.config(text="Off", bg=PASTEL_RED, activebackground=PASTEL_RED)                
-
 
     def update_goal_radio_btns(self):
         # remove the old radio buttons
         for i in range(len(self.radio_buttons)):
-            self.radio_buttons[i].place_forget()
+            self.radio_buttons[i].grid_forget()
         self.radio_buttons = []
         for i, folder in enumerate(self.controller.eval_goal_dirs[::-1][:LAST_N_GOALS]):
             # strip off everything before ../data
             folder = folder.split("data/")[-1]
             # change self.selected_goal_dir_idx to the index of the selected radio button
-            self.radio_buttons.append(Radiobutton(self, text=folder, variable=self.selected_goal_dir_idx, value=i, command=self.goal_img_changed))
+            self.radio_buttons.append(ctk.CTkRadioButton(self, text=folder, variable=self.selected_goal_dir_idx, value=i, command=self.goal_img_changed))
 
     def goal_img_changed(self):
         print(f"goal img changed to {self.controller.eval_goal_dirs[::-1][self.selected_goal_dir_idx.get()]}")
@@ -355,24 +327,22 @@ class EvalConfigurationPage(tk.Frame):
             self.controller.policy.load_goal_img_dir(self.controller.eval_goal_dirs[::-1][self.selected_goal_dir_idx.get()])
 
     def place_image_gc_elements(self):
-        self.goal_dir_label.place(relx=0.5, rely=0.5)
+        self.goal_dir_label.grid(row=GOAL_IMAGE_ROW, column=5)
         for i in range(len(self.radio_buttons)):
-            self.radio_buttons[i].place(relx=self.lang_text_x, rely=self.lang_text_y + i * 0.02)
-        self.capture_goal_btn.place(relx=self.lang_text_x + 0.04, rely=self.lang_text_y + 0.12)
+            self.radio_buttons[i].grid(row=GOAL_IMAGE_ROW+i+1, column=5)
+        self.capture_goal_btn.grid(row=GOAL_IMAGE_ROW+1+len(self.radio_buttons), column=5)
 
     def forget_image_gc_elements(self):
-        self.goal_dir_label.place_forget()
+        self.goal_dir_label.grid_forget()
         for i in range(len(self.radio_buttons)):
-            self.radio_buttons[i].place_forget()
-        self.capture_goal_btn.place_forget()
+            self.radio_buttons[i].grid_forget()
+        self.capture_goal_btn.grid_forget()
 
     def toggle_text_box(self):
         if self.conditioning_dict["language"].get():
-            self.lang_text_lbl.place(relx=self.lang_text_x, rely=self.lang_text_y-0.04)
-            self.lang_text.place(relx=self.lang_text_x, rely=self.lang_text_y)
+            self.lang_text.grid(row=8, column=5)
         else:
-            self.lang_text_lbl.place_forget()
-            self.lang_text.place_forget()
+            self.lang_text.grid_forget()
 
     def toggle_capture_goal(self):
         if self.conditioning_dict["image"].get():
@@ -408,7 +378,7 @@ class EvalConfigurationPage(tk.Frame):
 
 
 
-class CaptureGoal(tk.Frame):
+class CaptureGoal(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
@@ -426,24 +396,23 @@ class CaptureGoal(tk.Frame):
         self.mode = "live"
 
         # Title #
-        title_lbl = Label(self, textvariable=self.title_str, font=Font(size=30, weight="bold"))
+        title_lbl = ctk.CTkLabel(self, textvariable=self.title_str, font=ctk.CTkFont(size=30, weight="bold"))
         title_lbl.place(relx=0.5, rely=0.02, anchor="n")
 
         # Instructions #
-        instr_lbl = tk.Label(self, textvariable=self.instr_str, font=Font(size=24, slant="italic"))
+        instr_lbl = ctk.CTkLabel(self, textvariable=self.instr_str, font=ctk.CTkFont(size=24, slant="italic"))
         instr_lbl.place(relx=0.5, rely=0.06, anchor="n")
 
         # Timer #
         self.timer_on = False
         self.time_str = StringVar()
-        self.timer = tk.Button(
+        self.timer = ctk.CTkButton(
             self,
             textvariable=self.time_str,
-            highlightbackground="black",
-            font=Font(size=40, weight="bold"),
-            padx=3,
-            pady=5,
-            borderwidth=10,
+            # border_color="black",
+            # border_spacing=3,
+            font=ctk.CTkFont(size=40, weight="bold"),
+            # border_width=10,
         )
 
         # Image Variables #
@@ -471,14 +440,12 @@ class CaptureGoal(tk.Frame):
                 camera_thread.start()
 
         # if the mode is capture goal, add capture button
-        self.capture_goal_btn = tk.Button(
+        self.capture_goal_btn = ctk.CTkButton(
             self,
             text="Capture",
             # highlightbackground="red",
-            font=Font(size=30, weight="bold"),
-            padx=3,
-            pady=5,
-            borderwidth=10,
+            font=ctk.CTkFont(size=30, weight="bold"),
+            # border_width=10,
             command=lambda save=False: self.controller.get_goal_img_snapshots(),
         )
 
@@ -553,7 +520,10 @@ class CaptureGoal(tk.Frame):
             self.instr_str.set("press A to capture goal\n press B to go back to eval configuration page")
         else:
             self.title_str.set("Evaluating")
-            self.instr_str.set("press A to save eval as success\n press B to save eval as failure")
+            if self.controller.robot.save_data:
+                self.instr_str.set("press A to save eval as success\n press B to save eval as failure")
+            else:
+                self.instr_str.set("press A or B to exit eval")
 
         # Add Mode Specific Stuff #
         if "traj" in self.mode:
