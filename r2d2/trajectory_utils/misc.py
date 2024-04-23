@@ -392,13 +392,13 @@ def load_trajectory(
     return timestep_list
 
 
-def visualize_timestep(timestep, max_width=1000, max_height=500, aspect_ratio=1.5, pause_time=15):
+def visualize_timestep(timestep, key="depth", max_width=1000, max_height=500, aspect_ratio=1.5, pause_time=15):
     # Process Image Data #
     obs = timestep["observation"]
-    if "image" in obs:
-        img_obs = obs["image"]
-    elif "image" in obs["camera"]:
-        img_obs = obs["camera"]["image"]
+    if key in obs:
+        img_obs = obs[key]
+    elif key in obs["camera"]:
+        img_obs = obs["camera"][key]
     else:
         raise ValueError
 
@@ -432,6 +432,12 @@ def visualize_timestep(timestep, max_width=1000, max_height=500, aspect_ratio=1.
     for i in range(len(sorted_image_list)):
         img = Image.fromarray(sorted_image_list[i])
         resized_img = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
+        if key == "depth":
+            # convert resized_img to cv2 8 bit image
+            resized_img = np.array(resized_img, dtype=np.uint8)
+            # drop the alpha channel
+            resized_img = resized_img[:, :, :3]
+            resized_img = cv2.applyColorMap(np.array(resized_img), cv2.COLORMAP_JET)
         img_grid[i % num_rows].append(np.array(resized_img))
 
     # Combine Images #
@@ -455,8 +461,8 @@ def visualize_trajectory(
 ):
     traj_reader = TrajectoryReader(filepath, read_images=True)
     if recording_folderpath:
-        if camera_kwargs is {}:
-            camera_kwargs = defaultdict(lambda: {"image": True})
+        if camera_kwargs == {}:
+            camera_kwargs = defaultdict(lambda: {"image": True, "depth": True})
         camera_reader = RecordedMultiCameraWrapper(recording_folderpath, camera_kwargs)
 
     horizon = traj_reader.length()
@@ -487,7 +493,9 @@ def visualize_trajectory(
         delete_step = delete_skipped_step or camera_failed
         if delete_step:
             continue
-
+        
+        # print the keys in timestep
+        print(timestep.keys())
         # Get Image Info #
         assert "image" in timestep["observation"]
         img_obs = timestep["observation"]["image"]

@@ -20,8 +20,7 @@ class SVOReader:
         self._sbs_img = sl.Mat()
         self._left_img = sl.Mat()
         self._right_img = sl.Mat()
-        self._left_depth = sl.Mat()
-        self._right_depth = sl.Mat()
+        self._depth = sl.Mat()
         self._left_pointcloud = sl.Mat()
         self._right_pointcloud = sl.Mat()
 
@@ -64,8 +63,8 @@ class SVOReader:
 
     def get_frame_resolution(self):
         camera_info = self._cam.get_camera_information().camera_configuration
-        width = camera_info.resolution.width
-        height = camera_info.resolution.height
+        width = camera_info.camera_resolution.width
+        height = camera_info.camera_resolution.height
         return (width, height)
 
     def get_frame_count(self):
@@ -126,11 +125,10 @@ class SVOReader:
                     self.serial_number + "_right": self._process_frame(self._right_img),
                 }
         # if self.depth:
-        # 	self._cam.retrieve_measure(self._left_depth, sl.MEASURE.DEPTH, resolution=self.resolution)
-        # 	self._cam.retrieve_measure(self._right_depth, sl.MEASURE.DEPTH_RIGHT, resolution=self.resolution)
-        # 	data_dict['depth'] = {
-        # 		self.serial_number + '_left': self._left_depth.get_data().copy(),
-        # 		self.serial_number + '_right': self._right_depth.get_data().copy()}
+        #     # self._cam.retrieve_measure(self._depth, sl.MEASURE.DEPTH, resolution=self.zed_resolution)
+        #     self._cam.retrieve_image(self._depth, sl.VIEW.DEPTH, resolution=self.zed_resolution)
+        #     data_dict['depth'] = {
+        # 		self.serial_number: self._depth.get_data().copy()}
         # if self.pointcloud:
         # 	self._cam.retrieve_measure(self._left_pointcloud, sl.MEASURE.XYZRGBA, resolution=self.resolution)
         # 	self._cam.retrieve_measure(self._right_pointcloud, sl.MEASURE.XYZRGBA_RIGHT, resolution=self.resolution)
